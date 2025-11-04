@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>🚀 우주를 정복하라 🌌</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        /* Prevent touch callouts and selection on mobile */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        /* Allow text selection for readable content only */
+        p, span {
+            -webkit-user-select: text;
+            user-select: text;
+        }
+        /* Smooth touch scrolling */
+        html {
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function AsteroidGame() {
+          const [gameState, setGameState] = useState('ready');
+          const [score, setScore] = useState(0);
+          const [shipPosition, setShipPosition] = useState({ x: 50, y: 80 });
+          const [asteroids, setAsteroids] = useState([]);
+          const [blackHoles, setBlackHoles] = useState([]);
+          const [aliens, setAliens] = useState([]);
+          const [lasers, setLasers] = useState([]);
+          const [planetDebris, setPlanetDebris] = useState([]);
+          const [explosions, setExplosions] = useState([]);
+          const [planets, setPlanets] = useState([
+            { id: 'left', x: -8, y: 30, health: 100 },
+            { id: 'right', x: 108, y: 50, health: 100 }
+          ]);
+          const [mission, setMission] = useState(1);
+          const [missionProgress, setMissionProgress] = useState(0);
+          const [isMobile, setIsMobile] = useState(false);
+          const gameAreaRef = useRef(null);
+
+          const SHIP_SIZE = 40;
+          const ASTEROID_SIZE = 30;
+          const BLACKHOLE_SIZE = 50;
+          const ALIEN_SIZE = 40;
+          const LASER_SIZE = 20;
+          const DEBRIS_SIZE = 35;
+          const GAME_WIDTH = 400;
+          const GAME_HEIGHT = 600;
+
+          const missions = [
+            { id: 1, name: '🌠 운석 회피', target: 150, obstacles: ['asteroids'], description: '기본 운석을 피하며 생존하세요!' },
+            { id: 2, name: '🌀 블랙홀 지대', target: 250, obstacles: ['asteroids', 'blackHoles'], description: '블랙홀이 나타났습니다!' },
+            { id: 3, name: '🪐 행성 폭발', target: 350, obstacles: ['asteroids', 'planetDebris'], description: '옆의 행성이 폭발! 파편을 피하세요!' },
+            { id: 4, name: '👽 외계인 출현', target: 450, obstacles: ['asteroids', 'aliens', 'lasers'], description: '외계인의 레이저 공격을 피하세요!' },
+            { id: 5, name: '⚫블랙홀 폭풍', target: 600, obstacles: ['asteroids', 'blackHoles', 'planetDebris'], description: '블랙홀과 행성 파편이 동시에!' },
+            { id: 6, name: '🛸 외계 함대', target: 750, obstacles: ['asteroids', 'aliens', 'lasers', 'blackHoles'], description: '외계 함대의 집중 공격!' },
+            { id: 7, name: '💥 대폭발 지대', target: 900, obstacles: ['asteroids', 'planetDebris', 'blackHoles', 'aliens'], description: '모든 장애물이 동시 출현!' },
+            { id: 8, name: '☄️ 소행성 벨트', target: 1100, obstacles: ['asteroids', 'planetDebris', 'lasers'], description: '엄청난 수의 운석들!' },
+            { id: 9, name: '🌌 우주 대재앙', target: 1350, obstacles: ['asteroids', 'blackHoles', 'aliens', 'lasers', 'planetDebris'], description: '지옥 같은 우주 공간...' },
+            { id: 10, name: '👾 최종 결전', target: 1600, obstacles: ['asteroids', 'blackHoles', 'aliens', 'lasers', 'planetDebris'], description: '최후의 생존 미션! 모든 것을 피하세요!' }
+          ];
+
+          const currentMission = missions[mission - 1];
+
+          // Detect mobile device
+          useEffect(() => {
+            const checkMobile = () => {
+              setIsMobile(window.innerWidth <= 768 || 'ontouchstart' in window);
+            };
+            checkMobile();
+            window.addEventListener('resize', checkMobile);
+            return () => window.removeEventListener('resize', checkMobile);
+          }, []);
+
+          // Mobile touch control handler
+          const handleMobileControl = (direction) => {
+            if (gameState !== 'playing') return;
+            
+            setShipPosition(prev => {
+              let newPos = { ...prev };
+              
+              if (direction === 'left') {
+                newPos.x = Math.max(5, prev.x - 5);
+              } else if (direction === 'right') {
+                newPos.x = Math.min(95, prev.x + 5);
+              } else if (direction === 'up') {
+                newPos.y = Math.max(5, prev.y - 5);
+              } else if (direction === 'down') {
+                newPos.y = Math.min(95, prev.y + 5);
+              }
+              
+              return newPos;
+            });
+          };
+
+          useEffect(() => {
+            const handleKeyPress = (e) => {
+              if (gameState !== 'playing') return;
+              
+              setShipPosition(prev => {
+                let newPos = { ...prev };
+                
+                if (e.key === 'ArrowLeft') {
+                  newPos.x = Math.max(5, prev.x - 3);
+                } else if (e.key === 'ArrowRight') {
+                  newPos.x = Math.min(95, prev.x + 3);
+                } else if (e.key === 'ArrowUp') {
+                  newPos.y = Math.max(5, prev.y - 3);
+                } else if (e.key === 'ArrowDown') {
+                  newPos.y = Math.min(95, prev.y + 3);
+                }
+                
+                return newPos;
+              });
+            };
+
+            window.addEventListener('keydown', handleKeyPress);
+            return () => window.removeEventListener('keydown', handleKeyPress);
+          }, [gameState]);
+
+          useEffect(() => {
+            if (gameState !== 'playing') return;
+
+            const gameLoop = () => {
+              const obstacles = currentMission.obstacles;
+              
+              const getDifficultyMultiplier = () => {
+                if (mission === 8) return 2.5;
+                if (mission === 9) return 3.0;
+                if (mission === 10) return 3.5;
+                if (mission >= 6) return 1.8;
+                return 1.0;
+              };
+
+              const difficultyMultiplier = getDifficultyMultiplier();
+              
+              if (obstacles.includes('asteroids')) {
+                setAsteroids(prev => {
+                  const updated = prev
+                    .map(asteroid => ({ ...asteroid, y: asteroid.y + asteroid.speed }))
+                    .filter(asteroid => asteroid.y < 100);
+
+                  let spawnRate = mission === 8 ? 0.25 : mission === 9 ? 0.20 : mission === 10 ? 0.18 : 0.06 * difficultyMultiplier;
+
+                  if (Math.random() < spawnRate) {
+                    updated.push({
+                      id: Date.now() + Math.random(),
+                      x: Math.random() * 90,
+                      y: -5,
+                      speed: 0.8 + Math.random() * (2 + mission * 0.2)
+                    });
+                  }
+                  return updated;
+                });
+              }
+
+              if (obstacles.includes('blackHoles')) {
+                setBlackHoles(prev => {
+                  const updated = prev
+                    .map(hole => ({ ...hole, y: hole.y + hole.speed }))
+                    .filter(hole => hole.y < 100);
+
+                  const spawnRate = (mission === 6 || mission === 9 || mission === 10) ? 0.05 : 0.03;
+
+                  if (Math.random() < spawnRate) {
+                    updated.push({
+                      id: Date.now() + Math.random(),
+                      x: Math.random() * 85,
+                      y: -5,
+                      speed: 0.5 + Math.random() * 1.2
+                    });
+                  }
+                  return updated;
+                });
+              }
+
+              if (obstacles.includes('planetDebris')) {
+                setPlanetDebris(prev => {
+                  const updated = prev
+                    .map(debris => ({ ...debris, x: debris.x + debris.speedX, y: debris.y + debris.speedY }))
+                    .filter(debris => debris.y < 110 && debris.x > -10 && debris.x < 110);
+                  return updated;
+                });
+
+                const explosionRate = (mission === 7 || mission === 9) ? 0.025 : 0.015;
+
+                if (Math.random() < explosionRate) {
+                  setPlanets(prevPlanets => {
+                    const healthyPlanets = prevPlanets.filter(p => p.health > 0);
+                    if (healthyPlanets.length === 0) return prevPlanets;
+                    
+                    const planetToExplode = healthyPlanets[Math.floor(Math.random() * healthyPlanets.length)];
+                    
+                    setExplosions(exp => [...exp, { id: Date.now(), x: planetToExplode.x, y: planetToExplode.y }]);
+                    setTimeout(() => setExplosions(exp => exp.filter(e => e.id !== Date.now())), 1500);
+
+                    const debrisCount = (mission === 7 || mission === 9) ? 15 : mission >= 5 ? 10 : 6;
+
+                    for (let i = 0; i < debrisCount; i++) {
+                      const angle = (Math.random() * Math.PI * 0.8) - Math.PI * 0.4;
+                      const speed = 1 + Math.random() * 1.5;
+                      const directionX = planetToExplode.x < 50 ? 1 : -1;
+                      
+                      setPlanetDebris(prev => [...prev, {
+                        id: Date.now() + Math.random(),
+                        x: planetToExplode.x,
+                        y: planetToExplode.y,
+                        speedX: Math.cos(angle) * speed * directionX,
+                        speedY: Math.sin(angle) * speed + 0.3
+                      }]);
+                    }
+
+                    return prevPlanets.map(p => p.id === planetToExplode.id ? { ...p, health: 0 } : p);
+                  });
+
+                  setTimeout(() => setPlanets(prev => prev.map(p => ({ ...p, health: 100 }))), 3000);
+                }
+              }
+
+              if (obstacles.includes('aliens')) {
+                setAliens(prev => {
+                  const updated = prev
+                    .map(alien => ({ ...alien, y: alien.y + alien.speed, x: alien.x + Math.sin(alien.y * 0.1) * 0.5 }))
+                    .filter(alien => alien.y < 100);
+
+                  const spawnRate = (mission === 6 || mission === 9 || mission === 10) ? 0.06 : 0.03;
+
+                  if (Math.random() < spawnRate) {
+                    updated.push({
+                      id: Date.now() + Math.random(),
+                      x: Math.random() * 85,
+                      y: -5,
+                      speed: 0.6 + Math.random() * 1
+                    });
+                  }
+                  return updated;
+                });
+              }
+
+              if (obstacles.includes('lasers')) {
+                setLasers(prev => {
+                  const updated = prev
+                    .map(laser => ({ ...laser, y: laser.y + laser.speed }))
+                    .filter(laser => laser.y < 105);
+
+                  const fireRate = (mission === 6 || mission === 8 || mission === 9 || mission === 10) ? 0.08 : 0.04;
+
+                  aliens.forEach(alien => {
+                    if (Math.random() < fireRate && alien.y > 10 && alien.y < 70) {
+                      updated.push({
+                        id: Date.now() + Math.random(),
+                        x: alien.x + 2,
+                        y: alien.y + 5,
+                        speed: 2.5
+                      });
+                    }
+                  });
+
+                  return updated;
+                });
+              }
+
+              setScore(prev => {
+                const newScore = prev + 1;
+                setMissionProgress(newScore);
+                
+                if (newScore >= currentMission.target && mission < missions.length) {
+                  setGameState('missionComplete');
+                } else if (newScore >= currentMission.target && mission === missions.length) {
+                  setGameState('gameOver');
+                }
+                
+                return newScore;
+              });
+            };
+
+            const interval = setInterval(gameLoop, 50);
+            return () => clearInterval(interval);
+          }, [gameState, mission, currentMission, aliens]);
+
+          useEffect(() => {
+            if (gameState !== 'playing') return;
+
+            const checkCollision = () => {
+              const shipLeft = shipPosition.x;
+              const shipRight = shipPosition.x + (SHIP_SIZE / GAME_WIDTH * 100);
+              const shipTop = shipPosition.y;
+              const shipBottom = shipPosition.y + (SHIP_SIZE / GAME_HEIGHT * 100);
+
+              for (let asteroid of asteroids) {
+                const astLeft = asteroid.x;
+                const astRight = asteroid.x + (ASTEROID_SIZE / GAME_WIDTH * 100);
+                const astTop = asteroid.y;
+                const astBottom = asteroid.y + (ASTEROID_SIZE / GAME_HEIGHT * 100);
+
+                if (shipRight > astLeft && shipLeft < astRight && shipBottom > astTop && shipTop < astBottom) {
+                  setGameState('gameOver');
+                  return;
+                }
+              }
+
+              for (let hole of blackHoles) {
+                const holeLeft = hole.x;
+                const holeRight = hole.x + (BLACKHOLE_SIZE / GAME_WIDTH * 100);
+                const holeTop = hole.y;
+                const holeBottom = hole.y + (BLACKHOLE_SIZE / GAME_HEIGHT * 100);
+
+                if (shipRight > holeLeft && shipLeft < holeRight && shipBottom > holeTop && shipTop < holeBottom) {
+                  setGameState('gameOver');
+                  return;
+                }
+              }
+
+              for (let debris of planetDebris) {
+                const debrisLeft = debris.x;
+                const debrisRight = debris.x + (DEBRIS_SIZE / GAME_WIDTH * 100);
+                const debrisTop = debris.y;
+                const debrisBottom = debris.y + (DEBRIS_SIZE / GAME_HEIGHT * 100);
+
+                if (shipRight > debrisLeft && shipLeft < debrisRight && shipBottom > debrisTop && shipTop < debrisBottom) {
+                  setGameState('gameOver');
+                  return;
+                }
+              }
+
+              for (let alien of aliens) {
+                const alienLeft = alien.x;
+                const alienRight = alien.x + (ALIEN_SIZE / GAME_WIDTH * 100);
+                const alienTop = alien.y;
+                const alienBottom = alien.y + (ALIEN_SIZE / GAME_HEIGHT * 100);
+
+                if (shipRight > alienLeft && shipLeft < alienRight && shipBottom > alienTop && shipTop < alienBottom) {
+                  setGameState('gameOver');
+                  return;
+                }
+              }
+
+              for (let laser of lasers) {
+                const laserLeft = laser.x;
+                const laserRight = laser.x + (LASER_SIZE / GAME_WIDTH * 100);
+                const laserTop = laser.y;
+                const laserBottom = laser.y + (LASER_SIZE / GAME_HEIGHT * 100);
+
+                if (shipRight > laserLeft && shipLeft < laserRight && shipBottom > laserTop && shipTop < laserBottom) {
+                  setGameState('gameOver');
+                  return;
+                }
+              }
+            };
+
+            checkCollision();
+          }, [asteroids, blackHoles, planetDebris, aliens, lasers, shipPosition, gameState]);
+
+          const startGame = () => {
+            setGameState('playing');
+            setScore(0);
+            setMissionProgress(0);
+            setShipPosition({ x: 50, y: 80 });
+            setAsteroids([]);
+            setBlackHoles([]);
+            setAliens([]);
+            setLasers([]);
+            setPlanetDebris([]);
+            setExplosions([]);
+            setPlanets([
+              { id: 'left', x: -8, y: 30, health: 100 },
+              { id: 'right', x: 108, y: 50, health: 100 }
+            ]);
+          };
+
+          const nextMission = () => {
+            setMission(prev => prev + 1);
+            setGameState('playing');
+            setScore(0);
+            setMissionProgress(0);
+            setShipPosition({ x: 50, y: 80 });
+            setAsteroids([]);
+            setBlackHoles([]);
+            setAliens([]);
+            setLasers([]);
+            setPlanetDebris([]);
+            setExplosions([]);
+            setPlanets([
+              { id: 'left', x: -8, y: 30, health: 100 },
+              { id: 'right', x: 108, y: 50, health: 100 }
+            ]);
+          };
+
+          const restartGame = () => {
+            setMission(1);
+            startGame();
+          };
+
+          return (
+            <div className={`flex items-center justify-center min-h-screen bg-gradient-to-b from-indigo-900 via-purple-900 to-black ${isMobile ? 'p-2' : 'p-4'}`}>
+              <div className="text-center">
+                <h1 className={`font-bold text-white mb-2 ${isMobile ? 'text-4xl' : 'text-6xl'}`} style={{
+                  textShadow: '0 0 20px rgba(138, 43, 226, 0.8), 0 0 40px rgba(138, 43, 226, 0.5)'
+                }}>
+                  🚀 우주를 정복하라 🌌
+                </h1>
+                <p className="text-cyan-300 text-lg mb-2 font-semibold">
+                  {isMobile ? '터치 버튼으로 우주선을 조종하세요!' : '방향키 ↑ ↓ ← → 로 우주선을 자유롭게 조종하세요!'}
+                </p>
+                <div className="text-yellow-400 font-bold text-xl mb-4">
+                  미션 {mission}/10: {currentMission.name}
+                </div>
+                
+                <div 
+                  ref={gameAreaRef}
+                  className="relative mx-auto bg-black border-4 border-purple-500 rounded-lg overflow-hidden shadow-2xl"
+                  style={{ 
+                    width: isMobile ? 'min(100vw - 2rem, 400px)' : `${GAME_WIDTH}px`, 
+                    height: isMobile ? 'min(150vw - 3rem, 600px)' : `${GAME_HEIGHT}px`,
+                    maxWidth: '400px',
+                    maxHeight: '600px'
+                  }}
+                >
+                  <div className="absolute inset-0">
+                    {[...Array(50)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="absolute w-1 h-1 bg-white rounded-full animate-pulse"
+                        style={{
+                          left: `${Math.random() * 100}%`,
+                          top: `${Math.random() * 100}%`,
+                          animationDelay: `${Math.random() * 2}s`
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {currentMission.obstacles.includes('planetDebris') && planets.map(planet => (
+                    planet.health > 0 && (
+                      <div
+                        key={planet.id}
+                        className="absolute text-7xl transition-all duration-500"
+                        style={{
+                          left: `${planet.x}%`,
+                          top: `${planet.y}%`,
+                          transform: 'translate(-50%, -50%)',
+                          opacity: planet.health / 100,
+                          filter: 'drop-shadow(0 0 20px rgba(255, 165, 0, 0.6))'
+                        }}
+                      >
+                        🪐
+                      </div>
+                    )
+                  ))}
+
+                  {explosions.map(exp => (
+                    <div
+                      key={exp.id}
+                      className="absolute"
+                      style={{
+                        left: `${exp.x}%`,
+                        top: `${exp.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        pointerEvents: 'none'
+                      }}
+                    >
+                      <div className="text-8xl animate-ping">💥</div>
+                      <div className="absolute top-0 left-0 text-6xl animate-pulse" style={{ animationDuration: '0.5s' }}>🔥</div>
+                      <div className="absolute top-0 left-0 text-5xl" style={{ animation: 'spin 0.3s linear infinite' }}>✨</div>
+                    </div>
+                  ))}
+
+                  {asteroids.map(asteroid => (
+                    <div
+                      key={asteroid.id}
+                      className="absolute text-3xl"
+                      style={{
+                        left: `${asteroid.x}%`,
+                        top: `${asteroid.y}%`,
+                        transform: 'translate(-50%, -50%) rotate(45deg)',
+                        transition: 'none'
+                      }}
+                    >
+                      ☄️
+                    </div>
+                  ))}
+
+                  {blackHoles.map(hole => (
+                    <div
+                      key={hole.id}
+                      className="absolute text-5xl"
+                      style={{
+                        left: `${hole.x}%`,
+                        top: `${hole.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        transition: 'none',
+                        animation: 'spin 3s linear infinite'
+                      }}
+                    >
+                      🌀
+                    </div>
+                  ))}
+
+                  {planetDebris.map(debris => (
+                    <div
+                      key={debris.id}
+                      className="absolute text-3xl"
+                      style={{
+                        left: `${debris.x}%`,
+                        top: `${debris.y}%`,
+                        transform: 'translate(-50%, -50%) rotate(120deg)',
+                        transition: 'none',
+                        filter: 'drop-shadow(0 0 5px rgba(255, 100, 0, 0.8))'
+                      }}
+                    >
+                      🪨
+                    </div>
+                  ))}
+
+                  {aliens.map(alien => (
+                    <div
+                      key={alien.id}
+                      className="absolute text-3xl"
+                      style={{
+                        left: `${alien.x}%`,
+                        top: `${alien.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        transition: 'none'
+                      }}
+                    >
+                      👽
+                    </div>
+                  ))}
+
+                  {lasers.map(laser => (
+                    <div
+                      key={laser.id}
+                      className="absolute"
+                      style={{
+                        left: `${laser.x}%`,
+                        top: `${laser.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        transition: 'none'
+                      }}
+                    >
+                      <div className="w-2 h-6 bg-red-500 shadow-lg shadow-red-500 rounded-full"></div>
+                    </div>
+                  ))}
+
+                  {gameState === 'playing' && (
+                    <div
+                      className="absolute text-4xl transition-all duration-100"
+                      style={{
+                        left: `${shipPosition.x}%`,
+                        top: `${shipPosition.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                        filter: 'drop-shadow(0 0 10px rgba(100, 200, 255, 0.8))'
+                      }}
+                    >
+                      🚀
+                    </div>
+                  )}
+
+                  {gameState === 'ready' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-90">
+                      <div className="text-center px-4 max-w-sm">
+                        <p className="text-white text-3xl mb-2 font-bold">🌟 미션 {mission}</p>
+                        <p className="text-yellow-400 text-2xl mb-3">{currentMission.name}</p>
+                        <p className="text-purple-300 text-lg mb-4">{currentMission.description}</p>
+                        <div className="text-cyan-400 text-sm mb-4 space-y-1">
+                          {currentMission.obstacles.includes('asteroids') && <p>☄️ 운석 (속도 증가!)</p>}
+                          {currentMission.obstacles.includes('blackHoles') && <p>🌀 블랙홀 (더 많이!)</p>}
+                          {currentMission.obstacles.includes('planetDebris') && <p>🪨 행성 파편 (폭발 주의!)</p>}
+                          {currentMission.obstacles.includes('aliens') && <p>👽 외계인 (빠른 이동!)</p>}
+                          {currentMission.obstacles.includes('lasers') && <p>🔴 레이저 (연사!)</p>}
+                        </div>
+                        <div className="text-red-400 text-lg font-bold mb-4">
+                          ⚠️ 난이도 대폭 상승! ⚠️
+                        </div>
+                        <button
+                          onClick={startGame}
+                          className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xl transition-colors shadow-lg"
+                        >
+                          미션 시작
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {gameState === 'missionComplete' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-90">
+                      <div className="text-center px-4">
+                        <p className="text-green-400 text-4xl font-bold mb-2">🎉 미션 성공!</p>
+                        <p className="text-white text-2xl mb-2">미션 {mission} 클리어!</p>
+                        <p className="text-purple-300 mb-4">점수: {score}</p>
+                        {mission < missions.length && (
+                          <>
+                            <p className="text-yellow-400 text-lg mb-4">다음 미션은 더 어렵습니다...</p>
+                            <button
+                              onClick={nextMission}
+                              className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-xl transition-colors shadow-lg"
+                            >
+                              다음 미션
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {gameState === 'gameOver' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-90">
+                      <div className="text-center px-4">
+                        {score >= currentMission.target && mission === missions.length ? (
+                          <div className="relative w-full h-full">
+                            <style>{`
+                              @keyframes landing {
+                                0%, 100% { top: 10%; transform: translateX(-50%) rotate(-10deg); }
+                                50% { top: 35%; transform: translateX(-50%) rotate(10deg); }
+                              }
+                              @keyframes planetGlow {
+                                0%, 100% { filter: drop-shadow(0 0 30px rgba(100, 200, 255, 0.8)); }
+                                50% { filter: drop-shadow(0 0 50px rgba(150, 220, 255, 1)); }
+                              }
+                              @keyframes shoot {
+                                0% { transform: translate(0, 0) rotate(45deg); opacity: 0; }
+                                10% { opacity: 1; }
+                                90% { opacity: 1; }
+                                100% { transform: translate(300px, 300px) rotate(45deg); opacity: 0; }
+                              }
+                            `}</style>
+
+                            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                              <div className="text-9xl animate-pulse" style={{ animation: 'planetGlow 3s ease-in-out infinite, spin 20s linear infinite' }}>
+                                🌍
+                              </div>
+                              <div className="absolute inset-0 -m-8">
+                                <div className="w-full h-full rounded-full border-4 border-cyan-400 opacity-30 animate-ping" style={{ animationDuration: '2s' }}></div>
+                              </div>
+                              <div className="absolute inset-0 -m-12">
+                                <div className="w-full h-full rounded-full border-4 border-purple-400 opacity-20 animate-ping" style={{ animationDuration: '3s' }}></div>
+                              </div>
+                            </div>
+
+                            <div className="absolute text-6xl" style={{ left: '50%', animation: 'landing 4s ease-in-out infinite', filter: 'drop-shadow(0 0 20px rgba(255, 200, 100, 0.9))' }}>
+                              🚀
+                            </div>
+
+                            {[...Array(20)].map((_, i) => (
+                              <div key={i} className="absolute text-2xl animate-pulse" style={{
+                                left: `${20 + Math.random() * 60}%`,
+                                top: `${10 + Math.random() * 80}%`,
+                                animationDelay: `${Math.random() * 2}s`,
+                                animationDuration: `${1 + Math.random() * 2}s`
+                              }}>
+                                ✨
+                              </div>
+                            ))}
+
+                            {[...Array(3)].map((_, i) => (
+                              <div key={`star-${i}`} className="absolute text-3xl" style={{
+                                left: `${10 + i * 30}%`,
+                                top: '5%',
+                                animation: 'shoot 3s ease-in infinite',
+                                animationDelay: `${i * 1}s`
+                              }}>
+                                💫
+                              </div>
+                            ))}
+
+                            <div className="absolute top-8 left-0 right-0 z-10">
+                              <div className="animate-bounce">
+                                <p className="text-yellow-400 text-5xl font-bold mb-2" style={{
+                                  textShadow: '0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(255, 215, 0, 0.6)'
+                                }}>
+                                  🏆 전설의 파일럿! 🏆
+                                </p>
+                              </div>
+                              <p className="text-cyan-300 text-2xl mb-2 animate-pulse">미지의 행성 발견!</p>
+                              <p className="text-white text-xl mb-1">모든 미션 완료!</p>
+                              <p className="text-green-400 text-lg">10단계 클리어! 🎊</p>
+                            </div>
+
+                            <div className="absolute bottom-20 left-0 right-0 z-10">
+                              <div className="bg-gradient-to-r from-purple-900 to-blue-900 bg-opacity-90 rounded-lg px-8 py-5 inline-block border-2 border-cyan-400">
+                                <p className="text-purple-200 text-xl mb-2">최종 점수: <span className="text-yellow-300 font-bold">{score}</span></p>
+                                <p className="text-cyan-300 text-lg mb-4">🌟 당신은 우주를 정복했습니다! 🌟</p>
+                                <button
+                                  onClick={restartGame}
+                                  className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg text-xl transition-all shadow-lg transform hover:scale-105 border-2 border-white"
+                                >
+                                  ⭐ 다시 도전하기 ⭐
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-red-500 text-4xl font-bold mb-2">💥 미션 실패!</p>
+                            <p className="text-white text-2xl mb-2">미션 {mission} 실패</p>
+                            <p className="text-purple-300 mb-4">점수: {score} / 목표: {currentMission.target}</p>
+                            <button
+                              onClick={restartGame}
+                              className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xl transition-colors shadow-lg"
+                            >
+                              처음부터 다시
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {gameState === 'playing' && (
+                    <div className="absolute top-4 left-4 right-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="text-white text-xl font-bold bg-black bg-opacity-80 px-3 py-1 rounded">
+                          점수: {score}
+                        </div>
+                        <div className="text-yellow-400 text-lg font-bold bg-black bg-opacity-80 px-3 py-1 rounded">
+                          미션 {mission}/10
+                        </div>
+                      </div>
+                      <div className="bg-gray-700 rounded-full h-3 overflow-hidden border border-purple-400">
+                        <div 
+                          className="bg-gradient-to-r from-purple-500 via-pink-500 to-yellow-500 h-full transition-all duration-300"
+                          style={{ width: `${Math.min((score / currentMission.target) * 100, 100)}%` }}
+                        />
+                      </div>
+                      <div className="text-white text-sm mt-1 text-center bg-black bg-opacity-60 rounded px-2 py-0.5">
+                        목표: {currentMission.target}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile Touch Controls */}
+                {isMobile && gameState === 'playing' && (
+                  <div className="mt-4 flex flex-col items-center gap-2">
+                    <div className="flex justify-center">
+                      <button
+                        onTouchStart={() => handleMobileControl('up')}
+                        className="w-16 h-16 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-2xl font-bold rounded-lg shadow-lg transition-colors border-2 border-purple-400"
+                        style={{ touchAction: 'manipulation' }}
+                      >
+                        ↑
+                      </button>
+                    </div>
+                    <div className="flex justify-center gap-2">
+                      <button
+                        onTouchStart={() => handleMobileControl('left')}
+                        className="w-16 h-16 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-2xl font-bold rounded-lg shadow-lg transition-colors border-2 border-purple-400"
+                        style={{ touchAction: 'manipulation' }}
+                      >
+                        ←
+                      </button>
+                      <button
+                        onTouchStart={() => handleMobileControl('down')}
+                        className="w-16 h-16 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-2xl font-bold rounded-lg shadow-lg transition-colors border-2 border-purple-400"
+                        style={{ touchAction: 'manipulation' }}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        onTouchStart={() => handleMobileControl('right')}
+                        className="w-16 h-16 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-2xl font-bold rounded-lg shadow-lg transition-colors border-2 border-purple-400"
+                        style={{ touchAction: 'manipulation' }}
+                      >
+                        →
+                      </button>
+                    </div>
+                    <p className="text-cyan-300 text-sm mt-2">터치로 우주선을 조종하세요!</p>
+                  </div>
+                )}
+
+                <div className="mt-6 text-purple-300 text-sm space-y-1">
+                  {!isMobile && <p>💡 상하좌우 방향키로 자유롭게 움직이세요!</p>}
+                  {isMobile && <p>💡 터치 버튼을 연타하여 빠르게 움직이세요!</p>}
+                  {currentMission.obstacles.includes('planetDebris') && (
+                    <p className="text-orange-400">🪐 화면 양옆의 행성이 폭발하면 파편이 날아옵니다!</p>
+                  )}
+                  {currentMission.obstacles.includes('lasers') && (
+                    <p>⚠️ 외계인의 레이저 공격을 조심하세요!</p>
+                  )}
+                  {mission >= 7 && (
+                    <p className="text-red-400 font-bold">🔥 극한의 난이도! 집중력을 최대로!</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        ReactDOM.render(<AsteroidGame />, document.getElementById('root'));
+    </script>
+</body>
+</html>
