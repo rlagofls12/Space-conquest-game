@@ -217,31 +217,10 @@
             });
           };
 
-          // Handle touch on game area for mobile - relative drag movement
+          // Handle touch on game area for mobile - tap to move
           const handleTouchMove = (e) => {
             if (gameState !== 'playing' || !isMobile) return;
             e.preventDefault();
-            
-            const touch = e.touches[0];
-            
-            if (lastTouchPos) {
-              const deltaX = touch.clientX - lastTouchPos.x;
-              const deltaY = touch.clientY - lastTouchPos.y;
-              
-              const rect = gameAreaRef.current.getBoundingClientRect();
-              
-              // Convert pixel movement to percentage with sensitivity adjustment
-              const sensitivity = 0.15; // Lower = less sensitive, Higher = more sensitive
-              const moveX = (deltaX / rect.width) * 100 * sensitivity;
-              const moveY = (deltaY / rect.height) * 100 * sensitivity;
-              
-              setShipPosition(prev => ({
-                x: Math.max(5, Math.min(95, prev.x + moveX)),
-                y: Math.max(5, Math.min(95, prev.y + moveY))
-              }));
-            }
-            
-            setLastTouchPos({ x: touch.clientX, y: touch.clientY });
           };
 
           const handleTouchStart = (e) => {
@@ -249,13 +228,39 @@
             e.preventDefault();
             
             const touch = e.touches[0];
-            setLastTouchPos({ x: touch.clientX, y: touch.clientY });
-            setTouchStart({ x: touch.clientX, y: touch.clientY });
+            const rect = gameAreaRef.current.getBoundingClientRect();
+            
+            // Get touch position relative to game area
+            const touchX = ((touch.clientX - rect.left) / rect.width) * 100;
+            const touchY = ((touch.clientY - rect.top) / rect.height) * 100;
+            
+            // Move towards the touched position
+            setShipPosition(prev => {
+              const moveSpeed = 8; // Adjust this for faster/slower movement
+              
+              // Calculate direction
+              const deltaX = touchX - prev.x;
+              const deltaY = touchY - prev.y;
+              
+              // Normalize and apply movement
+              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+              
+              if (distance > 2) { // Only move if touch is far enough
+                const moveX = (deltaX / distance) * moveSpeed;
+                const moveY = (deltaY / distance) * moveSpeed;
+                
+                return {
+                  x: Math.max(5, Math.min(95, prev.x + moveX)),
+                  y: Math.max(5, Math.min(95, prev.y + moveY))
+                };
+              }
+              
+              return prev;
+            });
           };
 
           const handleTouchEnd = () => {
-            setLastTouchPos(null);
-            setTouchStart(null);
+            // Touch ended, ship stays in place
           };
 
           // Keyboard controls
@@ -679,7 +684,7 @@
                       🚀 우주를 정복하라 🌌
                     </h1>
                     <p className="text-cyan-300 text-sm">
-                      {isMobile ? '화면을 드래그하여 조종하세요!' : '방향키로 우주선을 조종하세요!'}
+                      {isMobile ? '화면을 탭하여 이동하세요!' : '방향키로 우주선을 조종하세요!'}
                     </p>
                   </div>
 
