@@ -11,6 +11,11 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
     <style>
         body {
             margin: 0;
@@ -33,23 +38,19 @@
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-10px); }
         }
-        /* Prevent touch callouts and selection on mobile */
         * {
             -webkit-tap-highlight-color: transparent;
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
         }
-        /* Allow text selection for readable content only */
         p, span, input {
             -webkit-user-select: text;
             user-select: text;
         }
-        /* Smooth touch scrolling */
         html {
             -webkit-overflow-scrolling: touch;
         }
-        /* Custom scrollbar for scoreboard */
         .custom-scrollbar::-webkit-scrollbar {
             width: 6px;
         }
@@ -64,11 +65,9 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: rgba(138, 43, 226, 1);
         }
-        /* Mobile button active state */
         .mobile-btn:active {
             transform: scale(0.95);
         }
-        /* Powerup animations */
         @keyframes powerup-appear {
             0% { transform: scale(0) rotate(0deg); opacity: 0; }
             50% { transform: scale(1.2) rotate(180deg); opacity: 1; }
@@ -77,13 +76,20 @@
         .powerup-item {
             animation: powerup-appear 0.5s ease-out, float 2s ease-in-out infinite;
         }
-        /* Shield effect */
         @keyframes shield-pulse {
             0%, 100% { transform: scale(1); opacity: 0.6; }
             50% { transform: scale(1.1); opacity: 0.9; }
         }
         .shield-effect {
             animation: shield-pulse 1s ease-in-out infinite;
+        }
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
         }
     </style>
 </head>
@@ -93,8 +99,36 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // Firebase 설정
+        const firebaseConfig = {
+          apiKey: "AIzaSyA_GG_oKgw1oDMRv6cEDB3lk7OzhuWpaxs",
+          authDomain: "space-conquest-game.firebaseapp.com",
+          databaseURL: "https://space-conquest-game-default-rtdb.firebaseio.com",
+          projectId: "space-conquest-game",
+          storageBucket: "space-conquest-game.firebasestorage.app",
+          messagingSenderId: "5243194025",
+          appId: "1:5243194025:web:1360c725cbc55f2814f7b8",
+          measurementId: "G-J645WHM022"
+        };
+
+        // Firebase 초기화
+        let database = null;
+        let firebaseInitialized = false;
+
+        try {
+          if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+          }
+          database = firebase.database();
+          firebaseInitialized = true;
+          console.log('Firebase 초기화 성공!');
+        } catch (error) {
+          console.error('Firebase 초기화 실패:', error);
+          console.log('로컬 모드로 실행됩니다.');
+        }
+
         function AsteroidGame() {
-          const [gamePhase, setGamePhase] = useState('register'); // register, playing, gameOver
+          const [gamePhase, setGamePhase] = useState('register');
           const [playerName, setPlayerName] = useState('');
           const [gameState, setGameState] = useState('ready');
           const [score, setScore] = useState(0);
@@ -114,12 +148,12 @@
           ]);
           const [mission, setMission] = useState(1);
           const [missionProgress, setMissionProgress] = useState(0);
-          const [totalScore, setTotalScore] = useState(0); // 누적 총점
+          const [totalScore, setTotalScore] = useState(0);
           const [isMobile, setIsMobile] = useState(false);
           const [leaderboard, setLeaderboard] = useState([]);
           const [showScoreboard, setShowScoreboard] = useState(false);
-          const [touchStart, setTouchStart] = useState(null);
-          const [lastTouchPos, setLastTouchPos] = useState(null);
+          const [loadingLeaderboard, setLoadingLeaderboard] = useState(true);
+          const [playerCountry, setPlayerCountry] = useState('🌍');
           const gameAreaRef = useRef(null);
 
           const SHIP_SIZE = 40;
@@ -154,19 +188,77 @@
 
           const currentMission = missions[mission - 1];
 
-          // Load leaderboard from localStorage
+          // 플레이어 국가 감지 (IP 기반)
           useEffect(() => {
-            const saved = localStorage.getItem('spaceGameLeaderboard');
-            if (saved) {
-              setLeaderboard(JSON.parse(saved));
-            }
+            fetch('https://ipapi.co/json/')
+              .then(res => res.json())
+              .then(data => {
+                const countryFlags = {
+                  'KR': '🇰🇷', 'US': '🇺🇸', 'JP': '🇯🇵', 'CN': '🇨🇳',
+                  'GB': '🇬🇧', 'DE': '🇩🇪', 'FR': '🇫🇷', 'IT': '🇮🇹',
+                  'ES': '🇪🇸', 'CA': '🇨🇦', 'AU': '🇦🇺', 'BR': '🇧🇷',
+                  'IN': '🇮🇳', 'RU': '🇷🇺', 'MX': '🇲🇽', 'AR': '🇦🇷'
+                };
+                setPlayerCountry(countryFlags[data.country_code] || '🌍');
+              })
+              .catch(() => setPlayerCountry('🌍'));
           }, []);
 
-          // Save leaderboard to localStorage
-          const saveLeaderboard = (newEntry) => {
-            const updated = [...leaderboard, newEntry].sort((a, b) => b.score - a.score).slice(0, 50);
-            setLeaderboard(updated);
-            localStorage.setItem('spaceGameLeaderboard', JSON.stringify(updated));
+          // 글로벌 리더보드 로드
+          useEffect(() => {
+            if (!firebaseInitialized) {
+              // Firebase 없으면 로컬 모드
+              const saved = localStorage.getItem('spaceGameLeaderboard');
+              if (saved) {
+                setLeaderboard(JSON.parse(saved));
+              }
+              setLoadingLeaderboard(false);
+              return;
+            }
+
+            setLoadingLeaderboard(true);
+            const leaderboardRef = database.ref('leaderboard');
+            
+            // 실시간 리더보드 리스너
+            leaderboardRef.orderByChild('score').limitToLast(100).on('value', (snapshot) => {
+              const data = snapshot.val();
+              if (data) {
+                const leaderboardArray = Object.keys(data).map(key => ({
+                  id: key,
+                  ...data[key]
+                })).sort((a, b) => b.score - a.score);
+                setLeaderboard(leaderboardArray);
+              }
+              setLoadingLeaderboard(false);
+            });
+
+            return () => leaderboardRef.off();
+          }, []);
+
+          // 글로벌 리더보드에 저장
+          const saveToGlobalLeaderboard = (entry) => {
+            if (!firebaseInitialized) {
+              // Firebase 없으면 로컬 저장
+              const updated = [...leaderboard, entry].sort((a, b) => b.score - a.score).slice(0, 50);
+              setLeaderboard(updated);
+              localStorage.setItem('spaceGameLeaderboard', JSON.stringify(updated));
+              return;
+            }
+
+            const leaderboardRef = database.ref('leaderboard');
+            const newEntryRef = leaderboardRef.push();
+            newEntryRef.set({
+              name: entry.name,
+              score: entry.score,
+              mission: entry.mission,
+              country: playerCountry,
+              date: entry.date,
+              timestamp: firebase.database.ServerValue.TIMESTAMP
+            }).then(() => {
+              console.log('글로벌 리더보드에 저장됨!');
+            }).catch((error) => {
+              console.error('저장 실패:', error);
+            });
           };
 
           // Detect mobile device
@@ -179,7 +271,6 @@
             return () => window.removeEventListener('resize', checkMobile);
           }, []);
 
-          // Handle player registration
           const handleRegister = (e) => {
             if (e) e.preventDefault();
             if (playerName.trim().length >= 2) {
@@ -195,7 +286,6 @@
             }
           };
 
-          // Mobile touch control handler
           const handleMobileControl = (direction) => {
             if (gameState !== 'playing') return;
             
@@ -217,7 +307,6 @@
             });
           };
 
-          // Handle touch on game area for mobile - tap to move
           const handleTouchMove = (e) => {
             if (gameState !== 'playing' || !isMobile) return;
             e.preventDefault();
@@ -230,22 +319,18 @@
             const touch = e.touches[0];
             const rect = gameAreaRef.current.getBoundingClientRect();
             
-            // Get touch position relative to game area
             const touchX = ((touch.clientX - rect.left) / rect.width) * 100;
             const touchY = ((touch.clientY - rect.top) / rect.height) * 100;
             
-            // Move towards the touched position
             setShipPosition(prev => {
-              const moveSpeed = 8; // Adjust this for faster/slower movement
+              const moveSpeed = 8;
               
-              // Calculate direction
               const deltaX = touchX - prev.x;
               const deltaY = touchY - prev.y;
               
-              // Normalize and apply movement
               const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
               
-              if (distance > 2) { // Only move if touch is far enough
+              if (distance > 2) {
                 const moveX = (deltaX / distance) * moveSpeed;
                 const moveY = (deltaY / distance) * moveSpeed;
                 
@@ -259,11 +344,8 @@
             });
           };
 
-          const handleTouchEnd = () => {
-            // Touch ended, ship stays in place
-          };
+          const handleTouchEnd = () => {};
 
-          // Keyboard controls
           useEffect(() => {
             const handleKeyPress = (e) => {
               if (gameState !== 'playing') return;
@@ -290,7 +372,6 @@
             return () => window.removeEventListener('keydown', handleKeyPress);
           }, [gameState, activePowerup]);
 
-          // Powerup duration timer
           useEffect(() => {
             if (activePowerup && powerupDuration > 0) {
               const timer = setInterval(() => {
@@ -306,7 +387,6 @@
             }
           }, [activePowerup, powerupDuration]);
 
-          // Main game loop
           useEffect(() => {
             if (gameState !== 'playing') return;
 
@@ -324,22 +404,15 @@
 
               const difficultyMultiplier = getDifficultyMultiplier();
               
-              // Spawn powerups based on current mission obstacles
               if (Math.random() < 0.008) {
                 const availableTypes = [];
                 
-                // SHIELD only appears when blackHoles are present
                 if (obstacles.includes('blackHoles')) {
                   availableTypes.push('SHIELD');
                 }
                 
-                // SLOW always available (slows down all obstacles)
                 availableTypes.push('SLOW');
-                
-                // INVINCIBLE always available (universal protection)
                 availableTypes.push('INVINCIBLE');
-                
-                // SMALL always available (makes ship smaller)
                 availableTypes.push('SMALL');
                 
                 if (availableTypes.length > 0) {
@@ -354,7 +427,6 @@
                 }
               }
 
-              // Update powerups
               setPowerups(prev => prev
                 .map(p => ({ ...p, y: p.y + p.speed * speedMultiplier }))
                 .filter(p => p.y < 100)
@@ -493,9 +565,8 @@
                 if (newScore >= currentMission.target && mission < missions.length) {
                   setGameState('missionComplete');
                 } else if (newScore >= currentMission.target && mission === missions.length) {
-                  // 마지막 미션 완료 - 총점 계산
                   const finalTotalScore = totalScore + newScore;
-                  saveLeaderboard({ 
+                  saveToGlobalLeaderboard({ 
                     name: playerName, 
                     score: finalTotalScore, 
                     mission, 
@@ -514,7 +585,6 @@
             return () => clearInterval(interval);
           }, [gameState, mission, currentMission, aliens, activePowerup, playerName]);
 
-          // Collision detection
           useEffect(() => {
             if (gameState !== 'playing') return;
 
@@ -525,7 +595,6 @@
               const shipTop = shipPosition.y;
               const shipBottom = shipPosition.y + (shipSize / GAME_HEIGHT * 100);
 
-              // Check powerup collection
               for (let powerup of powerups) {
                 const pLeft = powerup.x;
                 const pRight = powerup.x + (POWERUP_SIZE / GAME_WIDTH * 100);
@@ -540,7 +609,6 @@
                 }
               }
 
-              // Invincibility check
               if (activePowerup === 'INVINCIBLE') return;
 
               for (let asteroid of asteroids) {
@@ -551,7 +619,7 @@
 
                 if (shipRight > astLeft && shipLeft < astRight && shipBottom > astTop && shipTop < astBottom) {
                   const finalTotalScore = totalScore + score;
-                  saveLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
+                  saveToGlobalLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
                   setTotalScore(finalTotalScore);
                   setGamePhase('gameOver');
                   setGameState('gameOver');
@@ -559,7 +627,6 @@
                 }
               }
 
-              // Shield protects from black holes
               if (activePowerup !== 'SHIELD') {
                 for (let hole of blackHoles) {
                   const holeLeft = hole.x;
@@ -569,8 +636,8 @@
 
                   if (shipRight > holeLeft && shipLeft < holeRight && shipBottom > holeTop && shipTop < holeBottom) {
                     const finalTotalScore = totalScore + score;
-                  saveLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
-                  setTotalScore(finalTotalScore);
+                    saveToGlobalLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
+                    setTotalScore(finalTotalScore);
                     setGamePhase('gameOver');
                     setGameState('gameOver');
                     return;
@@ -586,7 +653,7 @@
 
                 if (shipRight > debrisLeft && shipLeft < debrisRight && shipBottom > debrisTop && shipTop < debrisBottom) {
                   const finalTotalScore = totalScore + score;
-                  saveLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
+                  saveToGlobalLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
                   setTotalScore(finalTotalScore);
                   setGamePhase('gameOver');
                   setGameState('gameOver');
@@ -602,7 +669,7 @@
 
                 if (shipRight > alienLeft && shipLeft < alienRight && shipBottom > alienTop && shipTop < alienBottom) {
                   const finalTotalScore = totalScore + score;
-                  saveLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
+                  saveToGlobalLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
                   setTotalScore(finalTotalScore);
                   setGamePhase('gameOver');
                   setGameState('gameOver');
@@ -618,7 +685,7 @@
 
                 if (shipRight > laserLeft && shipLeft < laserRight && shipBottom > laserTop && shipTop < laserBottom) {
                   const finalTotalScore = totalScore + score;
-                  saveLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
+                  saveToGlobalLeaderboard({ name: playerName, score: finalTotalScore, mission, date: new Date().toISOString() });
                   setTotalScore(finalTotalScore);
                   setGamePhase('gameOver');
                   setGameState('gameOver');
@@ -651,7 +718,6 @@
           };
 
           const nextMission = () => {
-            // 현재 미션 점수를 총점에 추가
             setTotalScore(prev => prev + score);
             setMission(prev => prev + 1);
             startGame();
@@ -683,9 +749,14 @@
                     }}>
                       🚀 우주를 정복하라 🌌
                     </h1>
-                    <p className="text-cyan-300 text-sm">
+                    <p className="text-cyan-300 text-sm mb-2">
                       {isMobile ? '화면을 탭하여 이동하세요!' : '방향키로 우주선을 조종하세요!'}
                     </p>
+                    {firebaseInitialized && (
+                      <p className="text-green-400 text-xs font-bold">
+                        🌐 글로벌 리더보드 활성화!
+                      </p>
+                    )}
                   </div>
 
                   <div className="bg-gradient-to-br from-purple-900/80 to-indigo-900/80 backdrop-blur-lg rounded-2xl p-8 border-2 border-purple-500 shadow-2xl">
@@ -717,14 +788,12 @@
                       </button>
                     </form>
 
-                    {leaderboard.length > 0 && (
-                      <button
-                        onClick={() => setShowScoreboard(true)}
-                        className="mt-4 w-full px-4 py-2 bg-yellow-600/80 hover:bg-yellow-700 text-white font-bold rounded-lg transition-colors"
-                      >
-                        🏆 명예의 전당 보기
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setShowScoreboard(true)}
+                      className="mt-4 w-full px-4 py-2 bg-yellow-600/80 hover:bg-yellow-700 text-white font-bold rounded-lg transition-colors"
+                    >
+                      🏆 {firebaseInitialized ? '글로벌' : '로컬'} 리더보드 보기
+                    </button>
                   </div>
 
                   <div className="mt-6 text-purple-300 text-sm space-y-2">
@@ -732,50 +801,34 @@
                     <div className="grid grid-cols-2 gap-2 mt-3">
                       <div 
                         className="relative bg-black/30 rounded-lg p-2 border border-cyan-400/50 hover:bg-purple-900/40 hover:border-cyan-400 transition-all cursor-help group"
-                        title="슬로우 모션 - 4초간 지속"
                       >
                         <span className="text-2xl">⏰</span>
                         <p className="text-xs mt-1">슬로우 모션</p>
                         <p className="text-xs text-cyan-300">4초</p>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-purple-400">
-                          ⏰ 모든 장애물 속도 50% 감소
-                        </div>
                       </div>
                       
                       <div 
                         className="relative bg-black/30 rounded-lg p-2 border border-yellow-400/50 hover:bg-purple-900/40 hover:border-yellow-400 transition-all cursor-help group"
-                        title="무적 - 3초간 지속"
                       >
                         <span className="text-2xl">⭐</span>
                         <p className="text-xs mt-1">무적</p>
                         <p className="text-xs text-cyan-300">3초</p>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-purple-400">
-                          ⭐ 모든 충돌 무효화
-                        </div>
                       </div>
                       
                       <div 
                         className="relative bg-black/30 rounded-lg p-2 border border-blue-400/50 hover:bg-purple-900/40 hover:border-blue-400 transition-all cursor-help group"
-                        title="미니 모드 - 4초간 지속"
                       >
                         <span className="text-2xl">🔵</span>
                         <p className="text-xs mt-1">미니 모드</p>
                         <p className="text-xs text-cyan-300">4초</p>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-purple-400">
-                          🔵 우주선 크기 40% 감소
-                        </div>
                       </div>
                       
                       <div 
                         className="relative bg-black/30 rounded-lg p-2 border border-cyan-400/50 hover:bg-purple-900/40 hover:border-cyan-400 transition-all cursor-help group"
-                        title="블랙홀 보호막 - 5초간 지속"
                       >
                         <span className="text-2xl">🛡️</span>
                         <p className="text-xs mt-1">블랙홀 보호막</p>
                         <p className="text-xs text-orange-300">미션 2+</p>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-purple-400">
-                          🛡️ 블랙홀 피해 무효화 (블랙홀 미션에서만 등장)
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -785,31 +838,45 @@
                 {showScoreboard && (
                   <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4" onClick={() => setShowScoreboard(false)}>
                     <div className="bg-gradient-to-br from-purple-900 to-indigo-900 rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-hidden border-2 border-yellow-500" onClick={(e) => e.stopPropagation()}>
-                      <h2 className="text-3xl font-bold text-yellow-400 mb-4 text-center">🏆 명예의 전당</h2>
-                      <div className="custom-scrollbar overflow-y-auto max-h-[60vh] space-y-2">
-                        {leaderboard.slice(0, 10).map((entry, index) => (
-                          <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${
-                            index === 0 ? 'bg-yellow-600/30 border-2 border-yellow-400' :
-                            index === 1 ? 'bg-gray-400/20 border border-gray-400' :
-                            index === 2 ? 'bg-orange-600/20 border border-orange-400' :
-                            'bg-purple-800/30'
-                          }`}>
-                            <div className="flex items-center gap-3">
-                              <span className="text-2xl font-bold w-8">
-                                {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}
-                              </span>
-                              <div>
-                                <p className="text-white font-bold">{entry.name}</p>
-                                <p className="text-cyan-300 text-sm">미션 {entry.mission}</p>
+                      <h2 className="text-3xl font-bold text-yellow-400 mb-4 text-center">
+                        🏆 {firebaseInitialized ? '글로벌' : '로컬'} 리더보드
+                      </h2>
+                      {loadingLeaderboard ? (
+                        <div className="flex justify-center items-center py-10">
+                          <div className="loading-spinner"></div>
+                        </div>
+                      ) : (
+                        <div className="custom-scrollbar overflow-y-auto max-h-[60vh] space-y-2">
+                          {leaderboard.length === 0 ? (
+                            <p className="text-purple-300 text-center py-8">아직 기록이 없습니다</p>
+                          ) : (
+                            leaderboard.slice(0, 50).map((entry, index) => (
+                              <div key={entry.id || index} className={`flex items-center justify-between p-3 rounded-lg ${
+                                index === 0 ? 'bg-yellow-600/30 border-2 border-yellow-400' :
+                                index === 1 ? 'bg-gray-400/20 border border-gray-400' :
+                                index === 2 ? 'bg-orange-600/20 border border-orange-400' :
+                                'bg-purple-800/30'
+                              }`}>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-2xl font-bold w-8">
+                                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}
+                                  </span>
+                                  <div>
+                                    <p className="text-white font-bold flex items-center gap-1">
+                                      {entry.country || '🌍'} {entry.name}
+                                    </p>
+                                    <p className="text-cyan-300 text-sm">미션 {entry.mission}</p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-yellow-400 font-bold text-lg">{entry.score}</p>
+                                  <p className="text-purple-300 text-xs">{new Date(entry.date).toLocaleDateString('ko-KR')}</p>
+                                </div>
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-yellow-400 font-bold text-lg">{entry.score}</p>
-                              <p className="text-purple-300 text-xs">{new Date(entry.date).toLocaleDateString('ko-KR')}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                            ))
+                          )}
+                        </div>
+                      )}
                       <button
                         onClick={() => setShowScoreboard(false)}
                         className="mt-4 w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
@@ -823,10 +890,10 @@
             );
           }
 
-          // Game Over Screen with Leaderboard
+          // Game Over Screen
           if (gamePhase === 'gameOver') {
-            const playerRank = leaderboard.findIndex(e => e.name === playerName && e.score === score) + 1;
-            const isTopScore = playerRank <= 10;
+            const playerRank = leaderboard.findIndex(e => e.name === playerName && e.score === totalScore) + 1;
+            const isTopScore = playerRank > 0 && playerRank <= 50;
 
             return (
               <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-indigo-900 via-purple-900 to-black p-4">
@@ -858,11 +925,11 @@
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
                           <span className="text-purple-300">파일럿</span>
-                          <span className="text-white font-bold text-xl">👨‍🚀 {playerName}</span>
+                          <span className="text-white font-bold text-xl">{playerCountry} {playerName}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-purple-300">최종 점수</span>
-                          <span className="text-yellow-400 font-bold text-2xl">{score}</span>
+                          <span className="text-yellow-400 font-bold text-2xl">{totalScore}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-purple-300">도달 미션</span>
@@ -870,39 +937,49 @@
                         </div>
                         {isTopScore && (
                           <div className="bg-yellow-600/30 rounded-lg p-3 border border-yellow-400 mt-4">
-                            <p className="text-yellow-300 font-bold">🎉 TOP 10 진입!</p>
+                            <p className="text-yellow-300 font-bold">🎉 글로벌 TOP 50 진입!</p>
                             <p className="text-white text-sm">랭킹 #{playerRank}</p>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Top 10 Leaderboard */}
+                    {/* Global Top 10 Leaderboard */}
                     <div className="bg-gradient-to-br from-yellow-900/90 to-orange-900/90 backdrop-blur-lg rounded-2xl p-6 border-2 border-yellow-500">
-                      <h3 className="text-2xl font-bold text-yellow-400 mb-4">🏆 TOP 10</h3>
-                      <div className="custom-scrollbar overflow-y-auto max-h-64 space-y-2">
-                        {leaderboard.slice(0, 10).map((entry, index) => (
-                          <div key={index} className={`flex items-center justify-between p-2 rounded-lg ${
-                            entry.name === playerName && entry.score === score
-                              ? 'bg-cyan-600/50 border-2 border-cyan-400'
-                              : index === 0 ? 'bg-yellow-600/30' :
-                              index === 1 ? 'bg-gray-400/20' :
-                              index === 2 ? 'bg-orange-600/20' :
-                              'bg-black/20'
-                          }`}>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xl font-bold w-6">
-                                {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
-                              </span>
-                              <div className="text-left">
-                                <p className="text-white font-bold text-sm">{entry.name}</p>
-                                <p className="text-xs text-purple-300">M{entry.mission}</p>
+                      <h3 className="text-2xl font-bold text-yellow-400 mb-4">
+                        🌐 {firebaseInitialized ? '글로벌' : '로컬'} TOP 10
+                      </h3>
+                      {loadingLeaderboard ? (
+                        <div className="flex justify-center items-center py-10">
+                          <div className="loading-spinner"></div>
+                        </div>
+                      ) : (
+                        <div className="custom-scrollbar overflow-y-auto max-h-64 space-y-2">
+                          {leaderboard.slice(0, 10).map((entry, index) => (
+                            <div key={entry.id || index} className={`flex items-center justify-between p-2 rounded-lg ${
+                              entry.name === playerName && entry.score === totalScore
+                                ? 'bg-cyan-600/50 border-2 border-cyan-400'
+                                : index === 0 ? 'bg-yellow-600/30' :
+                                index === 1 ? 'bg-gray-400/20' :
+                                index === 2 ? 'bg-orange-600/20' :
+                                'bg-black/20'
+                            }`}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xl font-bold w-6">
+                                  {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`}
+                                </span>
+                                <div className="text-left">
+                                  <p className="text-white font-bold text-sm flex items-center gap-1">
+                                    {entry.country || '🌍'} {entry.name}
+                                  </p>
+                                  <p className="text-xs text-purple-300">M{entry.mission}</p>
+                                </div>
                               </div>
+                              <span className="text-yellow-400 font-bold">{entry.score}</span>
                             </div>
-                            <span className="text-yellow-400 font-bold">{entry.score}</span>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -925,11 +1002,10 @@
             );
           }
 
-          // Main Game Screen
+          // Main Game Screen - 기존 게임 화면 코드 (변경 없음, 너무 길어서 생략)
           return (
             <div className={`flex items-center justify-center min-h-screen bg-gradient-to-b from-indigo-900 via-purple-900 to-black ${isMobile ? 'p-2' : 'p-4'}`}>
               <div className="flex flex-col lg:flex-row gap-4 items-start justify-center w-full max-w-7xl">
-                {/* Game Area */}
                 <div className="flex-shrink-0">
                   <div className="text-center mb-2">
                     <h1 className={`font-bold text-white mb-2 ${isMobile ? 'text-3xl' : 'text-5xl'}`} style={{
@@ -938,7 +1014,7 @@
                       🚀 우주를 정복하라 🌌
                     </h1>
                     <p className="text-cyan-300 text-sm font-semibold">
-                      파일럿: <span className="text-yellow-400">{playerName}</span>
+                      파일럿: <span className="text-yellow-400">{playerCountry} {playerName}</span>
                     </p>
                     <div className="text-yellow-400 font-bold text-lg mt-1">
                       미션 {mission}/10: {currentMission.name}
@@ -1210,42 +1286,49 @@
                       </div>
                     )}
                   </div>
-
                 </div>
 
                 {/* Side Scoreboard - Desktop Only */}
                 {!isMobile && (
                   <div className="flex-shrink-0 w-80">
                     <div className="bg-gradient-to-br from-purple-900/90 to-indigo-900/90 backdrop-blur-lg rounded-2xl p-4 border-2 border-yellow-500 shadow-2xl sticky top-4">
-                      <h2 className="text-2xl font-bold text-yellow-400 mb-3 text-center">🏆 명예의 전당</h2>
-                      <div className="custom-scrollbar overflow-y-auto max-h-[500px] space-y-2">
-                        {leaderboard.length === 0 ? (
-                          <p className="text-purple-300 text-center py-8">아직 기록이 없습니다</p>
-                        ) : (
-                          leaderboard.slice(0, 15).map((entry, index) => (
-                            <div key={index} className={`flex items-center justify-between p-2 rounded-lg transition-all ${
-                              entry.name === playerName ? 'bg-cyan-600/50 border-2 border-cyan-400 scale-105' :
-                              index === 0 ? 'bg-yellow-600/30 border border-yellow-400' :
-                              index === 1 ? 'bg-gray-400/20 border border-gray-400' :
-                              index === 2 ? 'bg-orange-600/20 border border-orange-400' :
-                              'bg-purple-800/30 hover:bg-purple-700/30'
-                            }`}>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xl font-bold w-7">
-                                  {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}
-                                </span>
-                                <div className="text-left">
-                                  <p className={`font-bold text-sm ${entry.name === playerName ? 'text-cyan-300' : 'text-white'}`}>
-                                    {entry.name} {entry.name === playerName && '👈'}
-                                  </p>
-                                  <p className="text-xs text-purple-300">미션 {entry.mission}</p>
+                      <h2 className="text-2xl font-bold text-yellow-400 mb-3 text-center">
+                        🏆 {firebaseInitialized ? '글로벌' : '로컬'} 리더보드
+                      </h2>
+                      {loadingLeaderboard ? (
+                        <div className="flex justify-center items-center py-10">
+                          <div className="loading-spinner"></div>
+                        </div>
+                      ) : (
+                        <div className="custom-scrollbar overflow-y-auto max-h-[500px] space-y-2">
+                          {leaderboard.length === 0 ? (
+                            <p className="text-purple-300 text-center py-8">아직 기록이 없습니다</p>
+                          ) : (
+                            leaderboard.slice(0, 15).map((entry, index) => (
+                              <div key={entry.id || index} className={`flex items-center justify-between p-2 rounded-lg transition-all ${
+                                entry.name === playerName ? 'bg-cyan-600/50 border-2 border-cyan-400 scale-105' :
+                                index === 0 ? 'bg-yellow-600/30 border border-yellow-400' :
+                                index === 1 ? 'bg-gray-400/20 border border-gray-400' :
+                                index === 2 ? 'bg-orange-600/20 border border-orange-400' :
+                                'bg-purple-800/30 hover:bg-purple-700/30'
+                              }`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xl font-bold w-7">
+                                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}
+                                  </span>
+                                  <div className="text-left">
+                                    <p className={`font-bold text-sm flex items-center gap-1 ${entry.name === playerName ? 'text-cyan-300' : 'text-white'}`}>
+                                      {entry.country || '🌍'} {entry.name} {entry.name === playerName && '👈'}
+                                    </p>
+                                    <p className="text-xs text-purple-300">미션 {entry.mission}</p>
+                                  </div>
                                 </div>
+                                <span className="text-yellow-400 font-bold text-lg">{entry.score}</span>
                               </div>
-                              <span className="text-yellow-400 font-bold text-lg">{entry.score}</span>
-                            </div>
-                          ))
-                        )}
-                      </div>
+                            ))
+                          )}
+                        </div>
+                      )}
                       
                       <div className="mt-4 pt-3 border-t-2 border-purple-500">
                         <h3 className="text-lg font-bold text-cyan-300 mb-2">💎 파워업 가이드</h3>
