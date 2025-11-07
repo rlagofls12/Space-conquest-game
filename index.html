@@ -91,6 +91,69 @@
             height: 30px;
             animation: spin 1s linear infinite;
         }
+        
+        /* 툴팁 스타일 */
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip-content {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%) translateY(5px);
+            background: linear-gradient(135deg, rgba(88, 28, 135, 0.98), rgba(67, 56, 202, 0.98));
+            color: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 13px;
+            white-space: nowrap;
+            z-index: 1000;
+            border: 2px solid rgba(139, 92, 246, 0.5);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(139, 92, 246, 0.3);
+            transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+        
+        .tooltip-content::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 8px solid transparent;
+            border-top-color: rgba(88, 28, 135, 0.98);
+        }
+        
+        .tooltip-container:hover .tooltip-content {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        
+        .tooltip-title {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 4px;
+            color: #FCD34D;
+        }
+        
+        .tooltip-description {
+            color: #E9D5FF;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .tooltip-duration {
+            color: #A5F3FC;
+            font-size: 11px;
+            margin-top: 4px;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -125,6 +188,53 @@
         } catch (error) {
           console.error('Firebase 초기화 실패:', error);
           console.log('로컬 모드로 실행됩니다.');
+        }
+
+        // 툴팁 컴포넌트
+        function PowerupTooltip({ type, children }) {
+          const POWERUP_TYPES = {
+            SHIELD: { 
+              emoji: '🛡️', 
+              name: '블랙홀 보호막', 
+              duration: 5000, 
+              color: 'cyan',
+              description: '블랙홀에 빨려 들어가지 않습니다'
+            },
+            SLOW: { 
+              emoji: '⏰', 
+              name: '슬로우 모션', 
+              duration: 4000, 
+              color: 'yellow',
+              description: '모든 장애물이 느려집니다'
+            },
+            INVINCIBLE: { 
+              emoji: '⭐', 
+              name: '무적', 
+              duration: 3000, 
+              color: 'gold',
+              description: '모든 장애물을 무시합니다'
+            },
+            SMALL: { 
+              emoji: '🔵', 
+              name: '미니 모드', 
+              duration: 4000, 
+              color: 'blue',
+              description: '우주선이 작아져 회피가 쉬워집니다'
+            }
+          };
+
+          const powerup = POWERUP_TYPES[type];
+
+          return (
+            <div className="tooltip-container">
+              {children}
+              <div className="tooltip-content">
+                <div className="tooltip-title">{powerup.emoji} {powerup.name}</div>
+                <div className="tooltip-description">{powerup.description}</div>
+                <div className="tooltip-duration">⏱️ 지속시간: {powerup.duration / 1000}초</div>
+              </div>
+            </div>
+          );
         }
 
         function AsteroidGame() {
@@ -167,10 +277,34 @@
           const GAME_HEIGHT = 600;
 
           const POWERUP_TYPES = {
-            SHIELD: { emoji: '🛡️', name: '블랙홀 보호막', duration: 5000, color: 'cyan' },
-            SLOW: { emoji: '⏰', name: '슬로우 모션', duration: 4000, color: 'yellow' },
-            INVINCIBLE: { emoji: '⭐', name: '무적', duration: 3000, color: 'gold' },
-            SMALL: { emoji: '🔵', name: '미니 모드', duration: 4000, color: 'blue' }
+            SHIELD: { 
+              emoji: '🛡️', 
+              name: '블랙홀 보호막', 
+              duration: 5000, 
+              color: 'cyan',
+              description: '블랙홀에 빨려 들어가지 않습니다'
+            },
+            SLOW: { 
+              emoji: '⏰', 
+              name: '슬로우 모션', 
+              duration: 4000, 
+              color: 'yellow',
+              description: '모든 장애물이 느려집니다'
+            },
+            INVINCIBLE: { 
+              emoji: '⭐', 
+              name: '무적', 
+              duration: 3000, 
+              color: 'gold',
+              description: '모든 장애물을 무시합니다'
+            },
+            SMALL: { 
+              emoji: '🔵', 
+              name: '미니 모드', 
+              duration: 4000, 
+              color: 'blue',
+              description: '우주선이 작아져 회피가 쉬워집니다'
+            }
           };
 
           const missions = [
@@ -207,7 +341,6 @@
           // 글로벌 리더보드 로드
           useEffect(() => {
             if (!firebaseInitialized) {
-              // Firebase 없으면 로컬 모드
               const saved = localStorage.getItem('spaceGameLeaderboard');
               if (saved) {
                 setLeaderboard(JSON.parse(saved));
@@ -219,7 +352,6 @@
             setLoadingLeaderboard(true);
             const leaderboardRef = database.ref('leaderboard');
             
-            // 실시간 리더보드 리스너
             leaderboardRef.orderByChild('score').limitToLast(100).on('value', (snapshot) => {
               const data = snapshot.val();
               if (data) {
@@ -238,7 +370,6 @@
           // 글로벌 리더보드에 저장
           const saveToGlobalLeaderboard = (entry) => {
             if (!firebaseInitialized) {
-              // Firebase 없으면 로컬 저장
               const updated = [...leaderboard, entry].sort((a, b) => b.score - a.score).slice(0, 50);
               setLeaderboard(updated);
               localStorage.setItem('spaceGameLeaderboard', JSON.stringify(updated));
@@ -799,37 +930,37 @@
                   <div className="mt-6 text-purple-300 text-sm space-y-2">
                     <p>💡 미션에 따라 다른 파워업이 나타납니다!</p>
                     <div className="grid grid-cols-2 gap-2 mt-3">
-                      <div 
-                        className="relative bg-black/30 rounded-lg p-2 border border-cyan-400/50 hover:bg-purple-900/40 hover:border-cyan-400 transition-all cursor-help group"
-                      >
-                        <span className="text-2xl">⏰</span>
-                        <p className="text-xs mt-1">슬로우 모션</p>
-                        <p className="text-xs text-cyan-300">4초</p>
-                      </div>
+                      <PowerupTooltip type="SLOW">
+                        <div className="bg-black/30 rounded-lg p-2 border border-cyan-400/50 hover:bg-purple-900/40 hover:border-cyan-400 transition-all cursor-help">
+                          <span className="text-2xl">⏰</span>
+                          <p className="text-xs mt-1">슬로우 모션</p>
+                          <p className="text-xs text-cyan-300">4초</p>
+                        </div>
+                      </PowerupTooltip>
                       
-                      <div 
-                        className="relative bg-black/30 rounded-lg p-2 border border-yellow-400/50 hover:bg-purple-900/40 hover:border-yellow-400 transition-all cursor-help group"
-                      >
-                        <span className="text-2xl">⭐</span>
-                        <p className="text-xs mt-1">무적</p>
-                        <p className="text-xs text-cyan-300">3초</p>
-                      </div>
+                      <PowerupTooltip type="INVINCIBLE">
+                        <div className="bg-black/30 rounded-lg p-2 border border-yellow-400/50 hover:bg-purple-900/40 hover:border-yellow-400 transition-all cursor-help">
+                          <span className="text-2xl">⭐</span>
+                          <p className="text-xs mt-1">무적</p>
+                          <p className="text-xs text-cyan-300">3초</p>
+                        </div>
+                      </PowerupTooltip>
                       
-                      <div 
-                        className="relative bg-black/30 rounded-lg p-2 border border-blue-400/50 hover:bg-purple-900/40 hover:border-blue-400 transition-all cursor-help group"
-                      >
-                        <span className="text-2xl">🔵</span>
-                        <p className="text-xs mt-1">미니 모드</p>
-                        <p className="text-xs text-cyan-300">4초</p>
-                      </div>
+                      <PowerupTooltip type="SMALL">
+                        <div className="bg-black/30 rounded-lg p-2 border border-blue-400/50 hover:bg-purple-900/40 hover:border-blue-400 transition-all cursor-help">
+                          <span className="text-2xl">🔵</span>
+                          <p className="text-xs mt-1">미니 모드</p>
+                          <p className="text-xs text-cyan-300">4초</p>
+                        </div>
+                      </PowerupTooltip>
                       
-                      <div 
-                        className="relative bg-black/30 rounded-lg p-2 border border-cyan-400/50 hover:bg-purple-900/40 hover:border-cyan-400 transition-all cursor-help group"
-                      >
-                        <span className="text-2xl">🛡️</span>
-                        <p className="text-xs mt-1">블랙홀 보호막</p>
-                        <p className="text-xs text-orange-300">미션 2+</p>
-                      </div>
+                      <PowerupTooltip type="SHIELD">
+                        <div className="bg-black/30 rounded-lg p-2 border border-cyan-400/50 hover:bg-purple-900/40 hover:border-cyan-400 transition-all cursor-help">
+                          <span className="text-2xl">🛡️</span>
+                          <p className="text-xs mt-1">블랙홀 보호막</p>
+                          <p className="text-xs text-orange-300">미션 2+</p>
+                        </div>
+                      </PowerupTooltip>
                     </div>
                   </div>
                 </div>
@@ -1002,7 +1133,7 @@
             );
           }
 
-          // Main Game Screen - 기존 게임 화면 코드 (변경 없음, 너무 길어서 생략)
+          // Main Game Screen
           return (
             <div className={`flex items-center justify-center min-h-screen bg-gradient-to-b from-indigo-900 via-purple-900 to-black ${isMobile ? 'p-2' : 'p-4'}`}>
               <div className="flex flex-col lg:flex-row gap-4 items-start justify-center w-full max-w-7xl">
@@ -1334,13 +1465,15 @@
                         <h3 className="text-lg font-bold text-cyan-300 mb-2">💎 파워업 가이드</h3>
                         <div className="space-y-2">
                           {Object.entries(POWERUP_TYPES).map(([key, value]) => (
-                            <div key={key} className="flex items-center gap-2 bg-black/30 rounded p-2">
-                              <span className="text-2xl">{value.emoji}</span>
-                              <div className="flex-1">
-                                <p className="text-white text-xs font-bold">{value.name}</p>
-                                <p className="text-purple-300 text-xs">{value.duration/1000}초</p>
+                            <PowerupTooltip key={key} type={key}>
+                              <div className="flex items-center gap-2 bg-black/30 rounded p-2 cursor-help hover:bg-black/50 transition-colors">
+                                <span className="text-2xl">{value.emoji}</span>
+                                <div className="flex-1">
+                                  <p className="text-white text-xs font-bold">{value.name}</p>
+                                  <p className="text-purple-300 text-xs">{value.duration/1000}초</p>
+                                </div>
                               </div>
-                            </div>
+                            </PowerupTooltip>
                           ))}
                         </div>
                       </div>
