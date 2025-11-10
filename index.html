@@ -154,6 +154,22 @@
             margin-top: 4px;
             font-weight: 600;
         }
+        
+        /* 피격 범위 표시 */
+        @keyframes hitbox-pulse {
+            0%, 100% { 
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.3;
+            }
+            50% { 
+                transform: translate(-50%, -50%) scale(1.05);
+                opacity: 0.5;
+            }
+        }
+        
+        .hitbox-indicator {
+            animation: hitbox-pulse 2s ease-in-out infinite;
+        }
     </style>
 </head>
 <body>
@@ -214,12 +230,12 @@
               color: 'gold',
               description: '모든 장애물을 무시합니다'
             },
-            SMALL: { 
-              emoji: '🔵', 
-              name: '미니 모드', 
-              duration: 4000, 
-              color: 'blue',
-              description: '우주선이 작아져 회피가 쉬워집니다'
+            DOUBLE_SCORE: { 
+              emoji: '🔥', 
+              name: '더블 스코어', 
+              duration: 5000, 
+              color: 'orange',
+              description: '점수가 2배로 증가합니다'
             }
           };
 
@@ -252,6 +268,7 @@
           const [powerups, setPowerups] = useState([]);
           const [activePowerup, setActivePowerup] = useState(null);
           const [powerupDuration, setPowerupDuration] = useState(0);
+          const [showHitbox, setShowHitbox] = useState(true);
           const [planets, setPlanets] = useState([
             { id: 'left', x: -8, y: 30, health: 100 },
             { id: 'right', x: 108, y: 50, health: 100 }
@@ -266,7 +283,7 @@
           const [playerCountry, setPlayerCountry] = useState('🌍');
           const gameAreaRef = useRef(null);
 
-          const SHIP_SIZE = 40;
+          const SHIP_SIZE = 24; // 40 * 0.6 = 24 (미니 모드 크기를 기본으로)
           const ASTEROID_SIZE = 30;
           const BLACKHOLE_SIZE = 50;
           const ALIEN_SIZE = 40;
@@ -298,12 +315,12 @@
               color: 'gold',
               description: '모든 장애물을 무시합니다'
             },
-            SMALL: { 
-              emoji: '🔵', 
-              name: '미니 모드', 
-              duration: 4000, 
-              color: 'blue',
-              description: '우주선이 작아져 회피가 쉬워집니다'
+            DOUBLE_SCORE: { 
+              emoji: '🔥', 
+              name: '더블 스코어', 
+              duration: 5000, 
+              color: 'orange',
+              description: '점수가 2배로 증가합니다'
             }
           };
 
@@ -544,7 +561,7 @@
                 
                 availableTypes.push('SLOW');
                 availableTypes.push('INVINCIBLE');
-                availableTypes.push('SMALL');
+                availableTypes.push('DOUBLE_SCORE');
                 
                 if (availableTypes.length > 0) {
                   const type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
@@ -690,7 +707,8 @@
               }
 
               setScore(prev => {
-                const newScore = prev + 1;
+                const scoreIncrement = activePowerup === 'DOUBLE_SCORE' ? 2 : 1;
+                const newScore = prev + scoreIncrement;
                 setMissionProgress(newScore);
                 
                 if (newScore >= currentMission.target && mission < missions.length) {
@@ -720,7 +738,7 @@
             if (gameState !== 'playing') return;
 
             const checkCollision = () => {
-              const shipSize = activePowerup === 'SMALL' ? SHIP_SIZE * 0.6 : SHIP_SIZE;
+              const shipSize = SHIP_SIZE;
               const shipLeft = shipPosition.x;
               const shipRight = shipPosition.x + (shipSize / GAME_WIDTH * 100);
               const shipTop = shipPosition.y;
@@ -946,11 +964,11 @@
                         </div>
                       </PowerupTooltip>
                       
-                      <PowerupTooltip type="SMALL">
-                        <div className="bg-black/30 rounded-lg p-2 border border-blue-400/50 hover:bg-purple-900/40 hover:border-blue-400 transition-all cursor-help">
-                          <span className="text-2xl">🔵</span>
-                          <p className="text-xs mt-1">미니 모드</p>
-                          <p className="text-xs text-cyan-300">4초</p>
+                      <PowerupTooltip type="DOUBLE_SCORE">
+                        <div className="bg-black/30 rounded-lg p-2 border border-orange-400/50 hover:bg-purple-900/40 hover:border-orange-400 transition-all cursor-help">
+                          <span className="text-2xl">🔥</span>
+                          <p className="text-xs mt-1">더블 스코어</p>
+                          <p className="text-xs text-cyan-300">5초</p>
                         </div>
                       </PowerupTooltip>
                       
@@ -1312,18 +1330,36 @@
                         style={{
                           left: `${shipPosition.x}%`,
                           top: `${shipPosition.y}%`,
-                          transform: `translate(-50%, -50%) scale(${activePowerup === 'SMALL' ? 0.6 : 1})`,
+                          transform: 'translate(-50%, -50%)',
                           filter: activePowerup === 'INVINCIBLE' 
                             ? 'drop-shadow(0 0 15px gold)' 
+                            : activePowerup === 'DOUBLE_SCORE'
+                            ? 'drop-shadow(0 0 15px orange)'
                             : 'drop-shadow(0 0 10px rgba(100, 200, 255, 0.8))'
                         }}
                       >
                         <div className="relative">
-                          <div className={`text-4xl ${activePowerup === 'INVINCIBLE' ? 'animate-pulse' : ''}`}>
+                          {/* 피격 범위 표시 */}
+                          {showHitbox && (
+                            <div 
+                              className="absolute hitbox-indicator rounded-full border-2 border-cyan-400"
+                              style={{
+                                width: `${SHIP_SIZE}px`,
+                                height: `${SHIP_SIZE}px`,
+                                left: '50%',
+                                top: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                                pointerEvents: 'none'
+                              }}
+                            />
+                          )}
+                          
+                          <div className={`text-2xl ${activePowerup === 'INVINCIBLE' ? 'animate-pulse' : ''} ${activePowerup === 'DOUBLE_SCORE' ? 'animate-bounce' : ''}`}>
                             🚀
                           </div>
                           {activePowerup === 'SHIELD' && (
-                            <div className="absolute inset-0 text-5xl shield-effect" style={{
+                            <div className="absolute inset-0 text-3xl shield-effect" style={{
                               color: 'cyan',
                               transform: 'translate(-50%, -50%)',
                               left: '50%',
@@ -1384,7 +1420,7 @@
                       <div className="absolute top-4 left-4 right-4">
                         <div className="flex justify-between items-center mb-2">
                           <div className="text-white text-xl font-bold bg-black bg-opacity-80 px-3 py-1 rounded">
-                            점수: {score}
+                            점수: {score} {activePowerup === 'DOUBLE_SCORE' && <span className="text-orange-400">×2</span>}
                           </div>
                           <div className="text-yellow-400 text-lg font-bold bg-black bg-opacity-80 px-3 py-1 rounded">
                             미션 {mission}/10
