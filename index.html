@@ -497,30 +497,61 @@
 
           const handleTouchEnd = () => {};
 
+          // 키보드 입력 처리 - 꾹 누르기 지원
+          const keysPressed = useRef({});
+
           useEffect(() => {
-            const handleKeyPress = (e) => {
+            const handleKeyDown = (e) => {
               if (gameState !== 'playing') return;
-              
+              if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                e.preventDefault();
+                keysPressed.current[e.key] = true;
+              }
+            };
+
+            const handleKeyUp = (e) => {
+              if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                e.preventDefault();
+                keysPressed.current[e.key] = false;
+              }
+            };
+
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp);
+            
+            return () => {
+              window.removeEventListener('keydown', handleKeyDown);
+              window.removeEventListener('keyup', handleKeyUp);
+            };
+          }, [gameState]);
+
+          // 키 입력에 따른 이동 처리
+          useEffect(() => {
+            if (gameState !== 'playing') return;
+
+            const moveInterval = setInterval(() => {
               setShipPosition(prev => {
                 let newPos = { ...prev };
-                const speed = activePowerup === 'SLOW' ? 2 : 3;
+                const speed = activePowerup === 'SLOW' ? 0.8 : 1.2;
                 
-                if (e.key === 'ArrowLeft') {
+                if (keysPressed.current['ArrowLeft']) {
                   newPos.x = Math.max(5, prev.x - speed);
-                } else if (e.key === 'ArrowRight') {
+                }
+                if (keysPressed.current['ArrowRight']) {
                   newPos.x = Math.min(95, prev.x + speed);
-                } else if (e.key === 'ArrowUp') {
+                }
+                if (keysPressed.current['ArrowUp']) {
                   newPos.y = Math.max(5, prev.y - speed);
-                } else if (e.key === 'ArrowDown') {
+                }
+                if (keysPressed.current['ArrowDown']) {
                   newPos.y = Math.min(95, prev.y + speed);
                 }
                 
                 return newPos;
               });
-            };
+            }, 16); // ~60fps
 
-            window.addEventListener('keydown', handleKeyPress);
-            return () => window.removeEventListener('keydown', handleKeyPress);
+            return () => clearInterval(moveInterval);
           }, [gameState, activePowerup]);
 
           useEffect(() => {
