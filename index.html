@@ -283,6 +283,7 @@
           const [loadingLeaderboard, setLoadingLeaderboard] = useState(true);
           const [playerCountry, setPlayerCountry] = useState('🌍');
           const gameAreaRef = useRef(null);
+          const keysPressed = useRef({});
 
           const SHIP_SIZE = 24; // 40 * 0.6 = 24 (미니 모드 크기를 기본으로)
           const ASTEROID_SIZE = 30;
@@ -497,31 +498,30 @@
 
           const handleTouchEnd = () => {};
 
+          // 키보드 상태 추적
           useEffect(() => {
-            const handleKeyPress = (e) => {
+            const handleKeyDown = (e) => {
               if (gameState !== 'playing') return;
-              
-              setShipPosition(prev => {
-                let newPos = { ...prev };
-                const speed = activePowerup === 'SLOW' ? 2 : 3;
-                
-                if (e.key === 'ArrowLeft') {
-                  newPos.x = Math.max(5, prev.x - speed);
-                } else if (e.key === 'ArrowRight') {
-                  newPos.x = Math.min(95, prev.x + speed);
-                } else if (e.key === 'ArrowUp') {
-                  newPos.y = Math.max(5, prev.y - speed);
-                } else if (e.key === 'ArrowDown') {
-                  newPos.y = Math.min(95, prev.y + speed);
-                }
-                
-                return newPos;
-              });
+              if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                e.preventDefault();
+                keysPressed.current[e.key] = true;
+              }
             };
 
-            window.addEventListener('keydown', handleKeyPress);
-            return () => window.removeEventListener('keydown', handleKeyPress);
-          }, [gameState, activePowerup]);
+            const handleKeyUp = (e) => {
+              if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                e.preventDefault();
+                keysPressed.current[e.key] = false;
+              }
+            };
+
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp);
+            return () => {
+              window.removeEventListener('keydown', handleKeyDown);
+              window.removeEventListener('keyup', handleKeyUp);
+            };
+          }, [gameState]);
 
           useEffect(() => {
             if (activePowerup && powerupDuration > 0) {
@@ -542,6 +542,27 @@
             if (gameState !== 'playing') return;
 
             const gameLoop = () => {
+              // 키보드 입력에 따른 우주선 이동
+              setShipPosition(prev => {
+                let newPos = { ...prev };
+                const speed = activePowerup === 'SLOW' ? 0.88 : 1.32;
+                
+                if (keysPressed.current['ArrowLeft']) {
+                  newPos.x = Math.max(5, prev.x - speed);
+                }
+                if (keysPressed.current['ArrowRight']) {
+                  newPos.x = Math.min(95, prev.x + speed);
+                }
+                if (keysPressed.current['ArrowUp']) {
+                  newPos.y = Math.max(5, prev.y - speed);
+                }
+                if (keysPressed.current['ArrowDown']) {
+                  newPos.y = Math.min(95, prev.y + speed);
+                }
+                
+                return newPos;
+              });
+
               const obstacles = currentMission.obstacles;
               const speedMultiplier = activePowerup === 'SLOW' ? 0.5 : 1.0;
               
