@@ -284,6 +284,7 @@
           const [playerCountry, setPlayerCountry] = useState('🌍');
           const gameAreaRef = useRef(null);
           const keysPressed = useRef({});
+          const touchTarget = useRef(null); // 모바일 터치 목표 위치
 
           const SHIP_SIZE = 24; // 40 * 0.6 = 24 (미니 모드 크기를 기본으로)
           const ASTEROID_SIZE = 30;
@@ -462,6 +463,14 @@
           const handleTouchMove = (e) => {
             if (gameState !== 'playing' || !isMobile) return;
             e.preventDefault();
+            
+            const touch = e.touches[0];
+            const rect = gameAreaRef.current.getBoundingClientRect();
+            
+            const touchX = ((touch.clientX - rect.left) / rect.width) * 100;
+            const touchY = ((touch.clientY - rect.top) / rect.height) * 100;
+            
+            touchTarget.current = { x: touchX, y: touchY };
           };
 
           const handleTouchStart = (e) => {
@@ -474,29 +483,12 @@
             const touchX = ((touch.clientX - rect.left) / rect.width) * 100;
             const touchY = ((touch.clientY - rect.top) / rect.height) * 100;
             
-            setShipPosition(prev => {
-              const moveSpeed = 8;
-              
-              const deltaX = touchX - prev.x;
-              const deltaY = touchY - prev.y;
-              
-              const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-              
-              if (distance > 2) {
-                const moveX = (deltaX / distance) * moveSpeed;
-                const moveY = (deltaY / distance) * moveSpeed;
-                
-                return {
-                  x: Math.max(5, Math.min(95, prev.x + moveX)),
-                  y: Math.max(5, Math.min(95, prev.y + moveY))
-                };
-              }
-              
-              return prev;
-            });
+            touchTarget.current = { x: touchX, y: touchY };
           };
 
-          const handleTouchEnd = () => {};
+          const handleTouchEnd = () => {
+            touchTarget.current = null;
+          };
 
           // 키보드 상태 추적
           useEffect(() => {
@@ -547,6 +539,7 @@
                 let newPos = { ...prev };
                 const speed = activePowerup === 'SLOW' ? 0.88 : 1.32;
                 
+                // 키보드 입력 처리
                 if (keysPressed.current['ArrowLeft']) {
                   newPos.x = Math.max(5, prev.x - speed);
                 }
@@ -558,6 +551,22 @@
                 }
                 if (keysPressed.current['ArrowDown']) {
                   newPos.y = Math.min(95, prev.y + speed);
+                }
+                
+                // 모바일 터치 입력 처리
+                if (touchTarget.current) {
+                  const deltaX = touchTarget.current.x - prev.x;
+                  const deltaY = touchTarget.current.y - prev.y;
+                  const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                  
+                  if (distance > 2) {
+                    const moveSpeed = activePowerup === 'SLOW' ? 1.5 : 2.2;
+                    const moveX = (deltaX / distance) * moveSpeed;
+                    const moveY = (deltaY / distance) * moveSpeed;
+                    
+                    newPos.x = Math.max(5, Math.min(95, prev.x + moveX));
+                    newPos.y = Math.max(5, Math.min(95, prev.y + moveY));
+                  }
                 }
                 
                 return newPos;
